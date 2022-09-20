@@ -1,5 +1,3 @@
-The scripting of the code sequences to operate the SBR was done using the scripting language described in the DAQFactory user's guide.
-
 # Anaerobic-feeding code sequence (C1_1_Feeding) 
 
 // Reset and start the timer sequence (only display proposes) by calling another code sequence
