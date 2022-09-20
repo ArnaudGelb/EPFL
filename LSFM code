@@ -1,0 +1,184 @@
+//User Input - Chose images
+#@File image ( label = "Choose CZI", style = "file" )
+#@File dir ( label = "Directory", style = "directory" )
+image = replace ( image, "\\", "/" );
+dir = replace ( dir, "\\", "/" );
+run ( "Bio-Formats Macro Extensions" );
+Ext.setId ( image );
+
+//Start Timer
+time1 = getTime();
+
+//Detection Objective
+Ext.getMetadataValue ( "Experiment|AcquisitionBlock|AcquisitionModeSetup|Objective #1", Objective );
+Ext.getMetadataValue ( "Information|Instrument|Objective|LensNA #1", na_ob );
+na_ob = parseFloat ( na_ob );
+
+//Pixel size Image
+Ext.getMetadataValue ( "Experiment|AcquisitionBlock|AcquisitionModeSetup|ScalingX #1", xy_res );
+xy_res = parseFloat ( xy_res );
+Ext.getMetadataValue ( "Experiment|AcquisitionBlock|AcquisitionModeSetup|ScalingZ #1", z_res );
+z_res = parseFloat ( z_res );
+
+//Warning
+print ( "Warning: This code is working only with 4 channels aquired with a zoom of 0.36" );
+print ( "The detected zoom is:" );
+Ext.getMetadataValue ( "Experiment|AcquisitionBlock|AcquisitionModeSetup|RtZoom #1", zoom );
+zoom = parseFloat ( zoom ); print ( zoom );
+
+//Lasers and Filters
+i = 1; laser = ""; filter = "";
+while ( i <= 4 ) {
+Ext.getMetadataValue ( "Information|Image|Channel|IlluminationWavelength|SinglePeak #"+i+"", laser );
+laser = parseInt ( laser );
+Ext.getMetadataValue ( "Information|Instrument|Filter|Name #"+i+"", filter );
+print ( "Channel"+i + " = Laser: " +laser+"nm ; Filter: "+filter );
+if (i == 1) { laser1=laser; filter1=filter; };
+if (i == 2) { laser2=laser; filter2=filter; };
+if (i == 3) { laser3=laser; filter3=filter; };
+if (i == 4) { laser4=laser; filter4=filter; };
+i = i + 1;		};
+
+//User Input - Chose parameters
+Dialog.create("Input Parameters");
+Dialog.addNumber ( "Sigma to define size of beads", 4.571 )
+Dialog.addNumber ( "Threshold beads detection", 0.0008247741 )
+Dialog.addNumber ( "Ch1 Em(max) beads in nm", 450 )
+Dialog.addNumber ( "Ch2 Em(max) beads in nm", 525 )
+Dialog.addNumber ( "Ch3 Em(max) beads in nm", 450 )
+Dialog.addNumber ( "Ch4 Em(max) beads in nm", 525 )
+Dialog.addNumber ( "Downsampling fusion", 4 )
+Dialog.show ();
+lambda1 = Dialog.getNumber ();
+lambda2 = Dialog.getNumber ();
+lambda3 = Dialog.getNumber ();
+lambda4 = Dialog.getNumber ();
+sigma_beads = Dialog.getNumber ();
+th_beads = Dialog.getNumber ();
+dwns = Dialog.getNumber ();
+
+//Rename Channels
+Dialog.create ( "Channel Name" );
+for (n = 1; n < i; n++) { Dialog.addString( "Channel "+n, "" ); }
+Dialog.show ();
+ch1 = Dialog.getString ();
+ch2 = Dialog.getString ();
+ch3 = Dialog.getString ();
+ch4 = Dialog.getString ();
+
+//Select LightSheet thickness
+if (laser1 == 405)  {thick1 = 10.82;}; if (laser1 == 488)  {thick1 = 13.04;}; if (laser1 == 561)  {thick1 = 14.99;}; if (laser1 == 638)  {thick1 = 17.04;};
+if (laser2 == 405)  {thick2 = 10.82;}; if (laser2 == 488)  {thick2 = 13.04;}; if (laser2 == 561)  {thick2 = 14.99;}; if (laser2 == 638)  {thick2 = 17.04;};
+if (laser3 == 405)  {thick3 = 10.82;}; if (laser3 == 488)  {thick3 = 13.04;}; if (laser3 == 561)  {thick3 = 14.99;}; if (laser3 == 638)  {thick3 = 17.04;};
+if (laser4 == 405)  {thick4 = 10.82;}; if (laser4 == 488)  {thick4 = 13.04;}; if (laser4 == 561)  {thick4 = 14.99;}; if (laser4 == 638)  {thick = 17.04;};
+
+//Define Anisotropy
+xy_ob1 = ( lambda1 / 1000 ) / ( 2 * na_ob );
+z_ob1 = ( lambda1 * 2 / 1000 ) / ( na_ob * na_ob );
+sigma_x1 = ( xy_res / xy_ob1 );
+sigma_y1 = ( xy_res / xy_ob1 );
+if ( z_ob1 > thick1 ) { sigma_z1 = (z_res / thick1); } else { sigma_z1 =( z_res / z_ob1 ); };
+xy_ob2 = ( lambda2 / 1000 ) / ( 2 * na_ob );
+z_ob2 = ( lambda2 * 2 / 1000 ) / ( na_ob * na_ob );
+sigma_x2 = ( xy_res / xy_ob2 );
+sigma_y2 = ( xy_res / xy_ob2 );
+if ( z_ob2 > thick2 ) { sigma_z2 = (z_res / thick2); } else { sigma_z2 =( z_res / z_ob2 ); };
+xy_ob3 = ( lambda1 / 1000 ) / ( 2 * na_ob );
+z_ob3 = ( lambda1 * 2 / 1000 ) / ( na_ob * na_ob );
+sigma_x3 = ( xy_res / xy_ob3 );
+sigma_y3 = ( xy_res / xy_ob3 );
+if ( z_ob3 > thick3 ) { sigma_z3 = (z_res / thick3); } else { sigma_z3 =( z_res / z_ob3 ); };
+xy_ob4 = ( lambda1 / 1000 ) / ( 2 * na_ob );
+z_ob4 = ( lambda1 * 2 / 1000 ) / ( na_ob * na_ob );
+sigma_x4 = ( xy_res / xy_ob4 );
+sigma_y4 = ( xy_res / xy_ob4 );
+if ( z_ob4 > thick4 ) { sigma_z4 = (z_res / thick4); } else { sigma_z4 =( z_res / z_ob4 ); };
+
+//Define dataset  
+run("Define Multi-View Dataset", 
+"define_dataset=[Zeiss Lightsheet Z.1 Dataset Loader (Bioformats)] project_filename=dataset.xml browse="+image+" first_czi="+image+" channel_1="+ch1+" channel_2="+ch2+" channel_3="+ch3+" channel_4="+ch4+" apply_rotation_to_dataset");
+
+//Resave as HDF5
+run("As HDF5", "select="+dir+"/dataset.xml resave_angle=[All angles] resave_channel=[All channels] resave_illumination=[All illuminations] resave_tile=[All tiles] resave_timepoint=[All Timepoints] subsampling_factors=[{ {1,1,1}, {2,2,2}, {4,4,4}, {8,8,8}, {16,16,16} }] hdf5_chunk_sizes=[{ {16,16,16}, {16,16,16}, {16,16,16}, {16,16,16}, {16,16,16} }] timepoints_per_partition=1 setups_per_partition=0 use_deflate_compression export_path="+dir+"/dataset.xml");
+	
+//Detect interest points
+run("Detect Interest Points for Registration", 
+"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch2+"] type_of_interest_point_detection=Difference-of-Gaussian label_interest_points=beads define_anisotropy subpixel_localization=[3-dimensional quadratic fit] interest_point_specification=[Advanced ...] downsample_xy=2x downsample_z=2x sigma="+sigma_beads+" threshold="+th_beads+" find_maxima image_sigma_x="+sigma_x4+" image_sigma_y="+sigma_y4+" image_sigma_z="+sigma_z4+" compute_on=[CPU (Java)]");
+
+//Refine Beads
+run("BigStitcher", "select="+dir+"/dataset.xml");
+waitForUser("Removed manually beads and open the Interest Point Explorer");
+Dialog.create("Number of beads detected");
+Dialog.addNumber("Detected Interest Points:", 0);
+Dialog.addNumber("Number of Beads:", 0);
+Dialog.show();
+nb_ip = Dialog.getNumber();
+nb_beads = Dialog.getNumber();
+
+waitForUser("Save changes and close the Multiview Explorer");
+
+//Register translation invariant
+run("Register Dataset based on Interest Points", 
+"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch2+"] registration_algorithm=[Precise descriptor-based (translation invariant)] registration_in_between_views=[Compare all views against each other] interest_points=[Manually removed] fix_views=[Fix first view] map_back_views=[Do not map back (use this if views are fixed)] transformation=Affine number_of_neighbors=3 redundancy=3 significance=10 allowed_error_for_ransac=10 ransac_iterations=Normal");
+
+//Register ICP
+run("Register Dataset based on Interest Points", 
+"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch2+"] registration_algorithm=[Assign closest-points with ICP (no invariance)] registration_in_between_views=[Compare all views against each other] interest_points=[Manually removed] fix_views=[Fix first view] map_back_views=[Do not map back (use this if views are fixed)] transformation=Affine maximal_distance=5 maximal_number=100");
+
+//Duplicate Transformations
+run("Duplicate Transformations", 
+"apply=[One channel to other channels] select="+dir+"/dataset.xml apply_to_angle=[All angles] apply_to_illumination=[All illuminations] apply_to_tile=[All tiles] apply_to_timepoint=[All Timepoints] source="+ch2+" target=[All Channels] duplicate_which_transformations=[Replace all transformations]");
+
+//Define Bounding Box
+run("Define Bounding Box", 
+"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch1+"] bounding_box=[Automatically find Bounding Box through image filtering] bounding_box_name=[Bounding Box] background=1 size_of_objects=100 downsampling=10");
+
+//Content based fusion without non-rigid (4xDwns)
+run("Fuse", 
+"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch1+"] bounding_box=[Bounding Box] downsampling="+dwns+" pixel_type=[32-bit floating point] interpolation=[Linear Interpolation] image=[Precompute Image] interest_points_for_non_rigid=[-= Disable Non-Rigid =-] use produce=[All views together] fused_image=[Save as (compressed) TIFF stacks] output_file_directory="+dir+" filename_addition="+ch1+"D"+dwns+" ");
+
+//Extract PSF
+//run("Extract PSFs", 
+//"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch2+"] interest_points=[Manually removed] use_corresponding remove_min_intensity_projections_from_psf psf_size_x=19 psf_size_y=19 psf_size_z=37");
+
+//Display PSF
+//run("View PSFs", 
+//"select="+dir+"/dataset.xml process_angle=[All angles] process_channel=[Single channel (Select from List)] process_illumination=[All illuminations] process_tile=[All tiles] process_timepoint=[All Timepoints] processing_channel=[channel "+ch2+"] display=[Maximum Projection of averaged PSF]");
+
+//Deconvolution
+
+//End Timer
+time2 = getTime (); duration_min = ( time2 - time1 ) / ( 60 * 1000 );
+
+//Display and Save Info Fusion
+print ("Log Fusion");
+print ( "Processing time in min" + duration_min);
+print ( "Objective: " + Objective );
+print ( "Zoom: " + zoom + " (Target Zoom: 0.36)" );
+print ( "Pixel size x,y: " + xy_res );
+print ( "Pixel size z: " + z_res );
+print ( "Channel_1 (" + ch1 + ") = Laser: " + laser1 + "nm ; Filter: " + filter1 + "; Em(max) beads: " + lambda1 + "nm");
+print ( "Channel_2 (" + ch2 + ") = Laser: " + laser2 + "nm ; Filter: " + filter2 + "; Em(max) beads: " + lambda2 + "nm");
+print ( "Channel_3 (" + ch3 + ") = Laser: " + laser3 + "nm ; Filter: " + filter3 + "; Em(max) beads: " + lambda3 + "nm");
+print ( "Channel_4 (" + ch4 + ") = Laser: " + laser4 + "nm ; Filter: " + filter4 + "; Em(max) beads: " + lambda4 + "nm");
+print ( "Sigma to define size of beads: " + sigma_beads );
+print ( "Threshold beads detection: " + th_beads );
+print ( "Number of Interest Points detected: " ) + nb_ip + "; Beads manually selected: ", nb_beads);
+log_window = getInfo ( "log" );
+start = "angles selected"; start = indexOf ( log_window, start ); end = "channels selected"; end = indexOf ( log_window, end );
+substring ( log_window, start, end );
+print( "Translation invariant registeration" );
+start = "Registration algorithm: Precise descriptor-based"; start = indexOf ( log_window, start ); end = "prealigned all tiles"; end = indexOf ( log_window, end );
+substring ( log_window, start, end );
+start = "Global optimization of 4 view-tiles"; start = indexOf ( log_window, start, end ); end = "DONE."; end = indexOf ( log_window, end, start );
+substring ( log_window, start, end );
+print( "ICP registeration" );
+start = "Using spimdata version"; start = indexOf ( log_window, start, end ); end = "prealigned all tiles"; end = indexOf ( log_window, end, start );
+substring ( log_window, start, end );
+start = "Global optimization of 4 view-tiles"; start = indexOf ( log_window, start, end ); end = "DONE."; end = indexOf ( log_window, end, start );
+substring ( log_window, start, end );
+print ("End Log Fusion");
+log_window = getInfo ( "log" );
+start = "Log Fusion"; start = indexOf ( log_window, start ); end = "End Log Fusion"; end = indexOf ( log_window, end );
+log_fusion = substring ( log_window, start, end );
+File.saveString ( log_fusion, ""+dir+"/Log_fusion.txt" );
