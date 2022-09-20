@@ -1,0 +1,263 @@
+The scripting of the code sequences to operate the SBR was done using the scripting language described in the DAQFactory user's guide.
+
+# Anaerobic-feeding code sequence (C1_1_Feeding) 
+
+// Reset and start the timer sequence (only display proposes) by calling another code sequence
+V.C1_Time1=0
+beginseq(C1_Time1_Feeding)
+
+// Create a .xls file and start saving an average of the acquired data every 5min
+Logging.C1_Acquisition.strFileName="Path output directory"+
+FormatDateTime("%b %d %Hh%M", SysTime())+".xls" 
+Logging.C1_Acquisition.Start()
+
+// Start an other code sequence to perform a 10min N2 flushing
+beginseq(C1_2_N2Mix)
+delay(10*60)
+
+// Label beginning feeding phase with a horizontal bar (only display propose)
+V.C1_beginning_end=0
+V.C1_beginning_end=100
+V.C1_beginning_end=0
+
+// Turn-on the two influent pumps for 5min to unsure that the pH probe is immersed 
+xC1_Influent_feeding_pump_Out=1
+delay(5*60)
+
+// Activate the pH regulation
+xC1_Acide_pH_pump_Out=1
+xC1_Base_pH_pump_Out=1
+
+// Start two other code sequences to monitor the pH and the temperature
+beginseq(C1_0_Alarm_pH)
+beginseq(C1_0_Alarm_Temp)
+
+// Keep the two influent pumps on for another 55min (1h total)
+delay(55*60)
+
+// Turn-off the two influent pumps
+xC1_Influent_feeding_pump_Out=0
+
+// Label end feeding phase with a horizontal bar (only display propose)
+V.C1_beginning_end=0
+V.C1_beginning_end=100
+V.C1_beginning_end=0
+
+// 10min of anaerobic mixing after the feeding
+delay(10*60)
+
+// Stop the timer (only display propose)
+endseq(C1_Time1_Feeding)
+
+// Start the aerobic mixing code sequence
+beginseq(C1_2_Aerobic)
+
+
+# Aerobic phase code sequence (C1_2_Aerobic)
+
+// Reset and start the timer sequence (only display proposes) by calling another code sequence
+V.C1_Time2=0
+beginseq(C1_Time2_Aerobic)
+
+// Label beginning aerobic mixing phase with a horizontal bar (only display propose)
+V.C1_beginning_end=0
+V.C1_beginning_end=100
+V.C1_beginning_end=0
+
+// Turn-on the gas recirculation pump
+xC1_Gas_recirculation_pump_Out=1
+
+// Start the two PID loop controlling the Air and N2 mass flow controller
+beginpid(C1_Air_composition_control_Air)
+beginpid(C1_Air_composition_control_N2)
+
+// Activate the pH regulation
+xC1_Acide_pH_pump_Out=1
+xC1_Base_pH_pump_Out=1
+
+// Start two other code sequences to monitor the pH and the temperature
+beginseq(C1_0_Alarm_pH)
+beginseq(C1_0_Alarm_Temp)
+
+// 120min of anaerobic mixing
+delay(120*60)
+
+// Label end aerobic mixing phase with a horizontal bar (only display propose)
+V.C1_beginning_end=0
+V.C1_beginning_end=100
+V.C1_beginning_end=0
+
+// Stop the timer (only display propose)
+endseq(C1_Time2_Aerobic)
+
+// Start the Settling & Withdrawal code sequence
+beginseq(C1_3_Withdrawal)
+
+
+# Settling & Withdrawal code sequence (C1_3_Withdrawal)
+
+// Reset and start the timer sequence (only display proposes) by calling another code sequence
+V.C1_Time3=0
+beginseq(C1_Time3_Withdrawal)
+
+// Open the clarifier valve to empty the clarified water
+xC1_Clarifier_Out=1
+
+// 5min of settling
+delay(5*60)
+
+// Close the clarifier valve
+xC1_Clarifier_Out=0
+
+// Turn-on the effluent pump
+xC1_Effluent_pump_Out=1
+delay(5*60)
+
+// Turn-off the effluent pump
+xC1_Effluent_pump_Out=0
+
+// Stop the data aquisiton
+Logging.C1_Acquisition.Stop()
+
+// Stop the timer (only display proposes)
+endseq(C1_Time3_Withdrawal)
+
+// Start the Anaerobic-feeding code sequence
+beginseq(C1_1_Feeding)
+
+
+# Header for code sequences: C1_1_Feeding, C1_2_Aerobic, C1_3_Withdrawal
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Ensure that every undesired SBR sequences, PID, components are turned off by looping 3 times
+for (Private.Counter=0, Counter<3, Counter++) 
+	do
+		endseq(C1_0_Alarm_pH)
+		endseq(C1_0_Alarm_Temp)
+		endpid(C1_Air_composition_control_N2)
+		endpid(C1_Air_composition_control_Air)
+		rAO_C1_Air_MFC_Out=0
+		rAO_C1_N2_MFC_Out=0
+		xC1_Acide_pH_pump_Out=0
+		xC1_Base_pH_pump_Out=0
+		xC1_Clarifier_Out=0
+		xC1_Effluent_pump_Out=0
+		xC1_Gas_recirculation_pump_Out=0
+		xC1_Influent_feeding_pump_Out=0
+endfor
+
+// Refresh the inputs
+	rC1_Acide_In=0
+	rC1_Base_In=0
+	rC1_Conductivity_In=0
+	rC1_Diss_Oxygen_In=0
+	rC1_Level_In=0
+	rC1_pH_In=0
+	rC1_Temp_In=0
+////////////////////////////////////////////////////////////////////////////////////////
+
+
+# Timer code sequence (V.C1_Time1, V.C1_Time2, V.C1_Time3)
+
+// While loop incrementing +1 to the variable every second
+while(1)
+	V.C1_TimeX=V.C1_TimeX+1
+	delay(1)
+endwhile
+
+
+# N2 flushing code sequence (C1_1_N2Mix)
+
+// N2 flushing at 0.1ln/min periodically rising at 0.6ln/min to mix the sludge bed
+while(1)
+	rAO_C1_N2_MFC_Out=0.5
+	delay(15)
+	rAO_C1_N2_MFC_Out=1
+	delay(15)
+	rAO_C1_N2_MFC_Out=1.5
+	delay(15)
+	rAO_C1_N2_MFC_Out=2
+	delay(15)
+	rAO_C1_N2_MFC_Out=2.5
+	delay(15)
+	rAO_C1_N2_MFC_Out=3
+	delay(30)
+	rAO_C1_N2_MFC_Out=2.5
+	delay(15)
+	rAO_C1_N2_MFC_Out=2
+	delay(15)
+	rAO_C1_N2_MFC_Out=1.5
+	delay(15)
+	rAO_C1_N2_MFC_Out=1
+	delay(15)
+	rAO_C1_N2_MFC_Out=0.5
+	delay(10*60)
+endwhile
+
+
+# pH monitoring code sequence (C1_0_Alarm_pH)
+
+// Check every min if the measured pH is within the tolerated boundary
+while(1)
+	If (rC1_pH_In[0]>9 || rC1_pH_In[0]<6)
+		// Start an other code sequence to send an email to the operator and shutdown the SBR
+		Email.strBody="C1 pH problem"
+		beginseq(C1_0_email)
+		beginseq(C1_0_General_Stop)
+		endseq(C1_0_Alarm_pH)
+	endif
+	delay(60)
+endwhile
+
+
+# Temperature monitoring code sequence (C1_Alarm_Temp)
+
+// Check every min if the measured temperature is within the tolerated boundary
+while(1)
+	If (rC1_Temp_In[0]>25 || rC1_Temp_In[0]<15)
+		// Start an other code sequence to send an email to the operator
+		Email.strBody="C1 Temperature problem"
+		beginseq(C1_email)
+		endseq(C1_Alarm_Temp)
+	endif
+	delay(60)
+endwhile
+
+
+# Emailing code sequence (C1_email)
+
+Email.strHost="mail.epfl.ch"
+Email.strUserName="deront"
+Email.strPassword=""
+Email.strEncoding="iso-8859-1"
+Email.strTo="arnaud.gelb@epfl.ch"
+Email.strAuthenticate="NoLogin"
+Email.Send()
+
+
+# SBR shutdown code sequence (C1_0_General_Stop)
+
+// Ensure that every SBR sequences, PID, components are inactivated by looping 3 times
+for (Private.Counter=0, Counter<3, Counter++) 
+	do
+		endseq(C1_0_Alarm_pH)
+		endseq(C1_0_Alarm_Temp)
+		endseq(C1_0_email)
+		endseq(C1_1_Feeding)
+		endseq(C1_1_N2Mix)
+		endseq(C1_2_Aerobic)
+		endseq(C1_3_Withdrawal)
+		endseq(C1_Time1_Feeding)
+		endseq(C1_Time2_Aerobic)
+		endseq(C1_Time3_Withdrawal)
+		endpid(C1_Air_composition_control_N2)
+		endpid(C1_Air_composition_control_Air)
+		rAO_C1_Air_MFC_Out=0
+		rAO_C1_N2_MFC_Out=0
+		xC1_Acide_pH_pump_Out=0
+		xC1_Base_pH_pump_Out=0
+		xC1_Clarifier_Out=0
+		xC1_Effluent_pump_Out=0
+		xC1_Gas_recirculation_pump_Out=0
+		xC1_Influent_feeding_pump_Out=0
+endfor
